@@ -45,6 +45,24 @@ init(_) ->
 terminate(_Reason,_State) -> ok.
 
 %%%=========================================================================
+%%% helper functions
+%%%=========================================================================
+
+keymergeunique(Tuple,TupleList) ->
+    keymerge(Tuple,TupleList,[]).
+
+keymerge(Tuple,[],FilteredList) ->
+    [Tuple|FilteredList];
+
+keymerge(Tuple={Key,_Value},[{Key,_}|TupleList],FilteredList) ->
+    keymerge(Tuple,TupleList,FilteredList);
+
+keymerge(Tuple={_Key,_Value},[OtherTuple|TupleList],FilteredList) ->
+    keymerge(Tuple,TupleList,[OtherTuple|FilteredList]).
+
+
+
+%%%=========================================================================
 %%% exports
 %%%=========================================================================
 
@@ -122,7 +140,7 @@ handle_call({store_tree,TreeID,Tree},_From,Trees) ->
 handle_cast({clear,TreeID},Trees) ->
     case lists:keymember(TreeID,1,Trees) of
         false -> {noreply,[{TreeID,gb_trees:empty()}|Trees]};
-        true -> {noreply,lists:keymerge([{TreeID,gb_trees:empty()}],1,Trees)}
+        true -> {noreply,keymergeunique({TreeID,gb_trees:empty()},Trees)}
     end;
 
 handle_cast({update,Key,Entry,TreeID},Trees) ->
@@ -130,7 +148,7 @@ handle_cast({update,Key,Entry,TreeID},Trees) ->
         false -> {noreply,Trees};
         {TreeID,Tree} ->
             NewTree=gb_trees:enter(Key,Entry,Tree),
-            NewTrees=lists:keymerge(1,[{TreeID,NewTree}],Trees),
+            NewTrees=keymergeunique({TreeID,NewTree},Trees),
             {noreply,NewTrees}
     end.
             
