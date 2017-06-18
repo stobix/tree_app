@@ -3,7 +3,7 @@
      {vsn,"0.9"},
      {modules,[tree_app,tree_srv,tree_sup]},
      {registered, [tree_srv]},
-     {applications, [kernel,stdlib]},
+     {applications, [kernel,stdlib,newdebug]},
      {mod, {tree_app, []}},
      {env, [ ]}
  ]}.

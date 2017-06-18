@@ -103,7 +103,7 @@ store(TreeID,Tree) ->
 % TODO: Make this work in a parallel environment.
 %%----------------------------------------------
 %% @doc Updates the entry Entry with key Key in the tree TreeID using gb_trees:enter
-%% @spec (term(),term(),gb_trees())-> ok.
+%% @spec (term(),term(),gb_trees()) -> ok
 %% @end
 %%----------------------------------------------
 enter(Key,Entry,TreeID) ->
@@ -115,7 +115,7 @@ insert(Key,Entry,TreeID) ->
 
 %%----------------------------------------------
 %% @doc creates a new tree and associates it with TreeID.
-%% @spec (term(),term(),gb_trees())-> ok|{error,exists}
+%% @spec (term())-> ok|{error,exists}
 %% @end
 %%----------------------------------------------
 new(TreeID) ->
@@ -123,7 +123,7 @@ new(TreeID) ->
 
 %%----------------------------------------------
 %% @doc returns the entry Entry with key Key in the tree TreeID.
-%% @spec (term(),term(),gb_trees())-> {value,Entry}|none.
+%% @spec (term(),term())-> {value,Entry}|none
 %% @end
 %%----------------------------------------------
 lookup(Key,TreeID) ->
