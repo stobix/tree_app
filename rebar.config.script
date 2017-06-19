@@ -9,6 +9,7 @@ case os:cmd("hg branch") of
 
         {deps,
             [
+            {erlando,".*",{git,"https://github.com/stobix/erlando","3.1.1"}},
             {newdebug,".*",{hg,"https://volatile@bitbucket.org/volatile/newdebug","tip"}}
         ] }
 
@@ -25,6 +26,7 @@ case os:cmd("hg branch") of
 
         {deps,
             [
+            {erlando,".*",{git,"https://github.com/stobix/erlando","3.1.1"}},
             {newdebug,".*",{hg,"https://volatile@bitbucket.org/volatile/newdebug","tip"}}
         ] }
 ]
