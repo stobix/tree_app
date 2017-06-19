@@ -162,8 +162,8 @@ updateTree(TreeID,Trees,Fun) ->
             Trees
     end.
 
-on2(F,Arg)->fun(Brg) -> F(Arg,Brg) end.
-on3(F,Arg,Brg)->fun(Crg) -> F(Arg,Brg,Crg) end.
+on2(Arg,F)->fun(Brg) -> F(Arg,Brg) end.
+on3(Arg,Brg,F)->fun(Crg) -> F(Arg,Brg,Crg) end.
 
 handle_call({to_list,TreeID},_From,Trees) ->
   Reply=doTree(TreeID,Trees,fun gb_trees:to_list/1),
