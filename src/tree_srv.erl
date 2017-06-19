@@ -1,5 +1,3 @@
--module(tree_srv).
--vsn("$Header$").
 %%%=========================================================================
 %%% Module tree_srv
 %%%=========================================================================
@@ -32,6 +30,8 @@
 %%%
 %%%=========================================================================
 %%%=========================================================================
+-module(tree_srv).
+-vsn("$Header$").
 
 
 -behaviour(gen_server).
@@ -44,8 +44,7 @@
         clear/1,
         delete_any/2,
         delete/2,
-        insert/3,
-        get/2
+        insert/3
         ]).
 
 -ifdef(test).
@@ -79,7 +78,7 @@ start_link() ->
 
 init(_) ->
   ?DEB1({tree,1},"Tree server started"),
-  {ok,[]}.
+  {ok,#{}}.
 
 terminate(_Reason,_State) -> ok.
 
@@ -129,10 +128,6 @@ new(TreeID) ->
 lookup(Key,TreeID) ->
   gen_server:call(?MODULE,{lookup,Key,TreeID}).
 
-get(Key,TreeID) ->
-  gen_server:call(?MODULE,{get,Key,TreeID}).
-
-
 to_list(TreeID) ->
   gen_server:call(?MODULE,{to_list,TreeID}).
 
@@ -149,58 +144,59 @@ delete(Key,TreeID) ->
 %%% gen_server callback functions.
 %%%=========================================================================
 
+doTree(TreeID,Trees,Fun) ->
+    case maps:find(TreeID,Trees) of
+        {ok,Tree} ->
+            Fun(Tree);
+        error ->
+            error
+    end.
+
+% Returns an updated tree map if the tree was found - otherwise returns the old tree.
+updateTree(TreeID,Trees,Fun) ->
+    case maps:find(TreeID,Trees) of
+        {ok,Tree} ->
+            NewTree=Fun(Tree),
+            Trees#{TreeID=>NewTree};
+        error ->
+            Trees
+    end.
+
+on2(F,Arg)->fun(Brg) -> F(Arg,Brg) end.
+on3(F,Arg,Brg)->fun(Crg) -> F(Arg,Brg,Crg) end.
+
 handle_call({to_list,TreeID},_From,Trees) ->
-  {TreeID,Tree}=lists:keyfind(TreeID,1,Trees),
-  {reply,gb_trees:to_list(Tree),Trees};
+  Reply=doTree(TreeID,Trees,fun gb_trees:to_list/1),
+  {reply,Reply,Trees};
 
 handle_call({lookup,Key,TreeID},_From,Trees) ->
-  {TreeID,Tree}=lists:keyfind(TreeID,1,Trees),
-  % TODO: In the parallel version, keep track of which keys are taken, and implement some kind of semaphoric thingie.
-  {reply,gb_trees:lookup(Key,Tree),Trees};
-
-handle_call({get,Key,TreeID},_From,Trees) ->
-  {TreeID,Tree}=lists:keyfind(TreeID,1,Trees),
-  {reply,gb_trees:get(Key,Tree),Trees};
+  Reply=doTree(TreeID,Trees,on2(Key,fun gb_trees:lookup/2)),
+  {reply,Reply,Trees};
 
 handle_call({store_tree,TreeID,Tree},_From,Trees) ->
   ?DEBL({tree,2},"storing a tree ~p into ~p",[TreeID,Trees]),
-  case lists:keymember(TreeID,1,Trees) of
-    false -> {reply,ok,[{TreeID,Tree}|Trees]};
+  case maps:is_key(TreeID,Trees) of
+    false -> {reply,ok,Trees#{TreeID=>Tree}};
     true ->  {reply,{error,exists},Trees}
   end.
 
 handle_cast({delete,Key,TreeID},Trees) ->
-  {TreeID,Tree}=lists:keyfind(TreeID,1,Trees),
-  NewTree=gb_trees:delete(Key,Tree),
-  NewTrees=lists:keymerge(1,[{TreeID,NewTree}],Trees),
+  NewTrees=updateTree(TreeID,Trees,on2(Key,fun gb_trees:delete/2)),
   {noreply,NewTrees};
 
 handle_cast({remove,Key,TreeID},Trees) ->
-  {TreeID,Tree}=lists:keyfind(TreeID,1,Trees),
-  NewTree=gb_trees:delete_any(Key,Tree),
-  NewTrees=lists:keymerge(1,[{TreeID,NewTree}],Trees),
+  NewTrees=updateTree(TreeID,Trees,on2(Key,fun gb_trees:delete_any/2)),
   {noreply,NewTrees};
 
-
 handle_cast({clear,TreeID},Trees) ->
-  case lists:keymember(TreeID,1,Trees) of
-    false -> {noreply,[{TreeID,gb_trees:empty()}|Trees]};
-    true -> {noreply,lists:keymerge([{TreeID,gb_trees:empty()}],1,Trees)}
-  end;
+  {noreply,Trees#{TreeID=>gb_trees:empty()}};
 
 handle_cast({insert,Key,Entry,TreeID},Trees) ->
-  {TreeID,Tree}=lists:keyfind(TreeID,1,Trees),
-  NewTree=gb_trees:insert(Key,Entry,Tree),
-  NewTrees=lists:keymerge(1,[{TreeID,NewTree}],Trees),
+  NewTrees=updateTree(TreeID,Trees,on3(Key,Entry,fun gb_trees:insert/3)),
   {noreply,NewTrees};
     
 
 handle_cast({update,Key,Entry,TreeID},Trees) ->
-  case lists:keyfind(TreeID,1,Trees) of
-    false -> {noreply,Trees};
-    {TreeID,Tree} ->
-      NewTree=gb_trees:enter(Key,Entry,Tree),
-      NewTrees=lists:keymerge(1,[{TreeID,NewTree}],Trees),
-      {noreply,NewTrees}
-  end.
+  NewTrees=updateTree(TreeID,Trees,on3(Key,Entry,fun gb_trees:enter/3)),
+  {noreply,NewTrees}.
 
