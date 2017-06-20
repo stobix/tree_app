@@ -31,21 +31,23 @@
 %%%=========================================================================
 %%%=========================================================================
 -module(tree_srv).
+-compile({parse_transform,cut}).
 -vsn("$Header$").
 
 
 -behaviour(gen_server).
 
--export([enter/3,
-        store/2,
-        new/1,
-        lookup/2,
-        to_list/1,
-        clear/1,
-        delete_any/2,
-        delete/2,
-        insert/3
-        ]).
+-export([
+    enter/3,
+    store/2,
+    new/1,
+    lookup/2,
+    to_list/1,
+    clear/1,
+    delete/2,
+    delete_any/2,
+    insert/3
+  ]).
 
 -ifdef(test).
 -include_lib("eunit/include/eunit.hrl").
@@ -85,6 +87,21 @@ terminate(_Reason,_State) -> ok.
 code_change(_,_,_) -> ok.
 handle_info(_,_) -> ok.
 
+
+-ifdef('USE_MAPS').
+-define(empty_tree,#{}).
+-define(tolist,maps:to_list(_)).
+-define(delete,maps:without([Key],_)).
+-define(lookup,fun(M)->case maps:find(Key,M) of {ok,X} -> {value,X}; error -> none end end).
+-define(update,_#{Key=>Entry}).
+-else.
+-define(empty_tree,gb_trees:empty()).
+-define(tolist,gb_trees:to_list(_)).
+-define(delete,gb_trees:delete_any(Key,_)).
+-define(lookup,gb_trees:lookup(Key,_)).
+-define(update,gb_trees:update(Key,Entry,_)).
+-endif.
+
 %%%=========================================================================
 %%% exports
 %%%=========================================================================
@@ -99,7 +116,6 @@ handle_info(_,_) -> ok.
 store(TreeID,Tree) ->
   gen_server:call(?MODULE,{store_tree,TreeID,Tree}).
 
-% TODO: Make this work in a parallel environment.
 %%----------------------------------------------
 %% @doc Updates the entry Entry with key Key in the tree TreeID using gb_trees:enter
 %% @spec (term(),term(),gb_trees()) -> ok
@@ -110,7 +126,8 @@ enter(Key,Entry,TreeID) ->
 
 
 insert(Key,Entry,TreeID) ->
-  gen_server:cast(?MODULE,{insert,Key,Entry,TreeID}).
+  %TODO: Crash the caller if the thing exists already.
+  gen_server:cast(?MODULE,{update,Key,Entry,TreeID}).
 
 %%----------------------------------------------
 %% @doc creates a new tree and associates it with TreeID.
@@ -118,7 +135,7 @@ insert(Key,Entry,TreeID) ->
 %% @end
 %%----------------------------------------------
 new(TreeID) ->
-  gen_server:call(?MODULE,{store_tree,TreeID,gb_trees:empty()}).
+  gen_server:call(?MODULE,{store_tree,TreeID,?empty_tree}).
 
 %%----------------------------------------------
 %% @doc returns the entry Entry with key Key in the tree TreeID.
@@ -134,8 +151,13 @@ to_list(TreeID) ->
 clear(TreeID) ->
   gen_server:cast(?MODULE,{clear,TreeID}).
 
+
+% This will only be useful if I make delete/2 crash the caller.
+%delete_any(Key,TreeID) ->
+%  gen_server:cast(?MODULE,{remove,Key,TreeID}).
+
 delete_any(Key,TreeID) ->
-  gen_server:cast(?MODULE,{remove,Key,TreeID}).
+  gen_server:cast(?MODULE,{delete,Key,TreeID}).
 
 delete(Key,TreeID) ->
   gen_server:cast(?MODULE,{delete,Key,TreeID}).
@@ -162,15 +184,13 @@ updateTree(TreeID,Trees,Fun) ->
             Trees
     end.
 
-on2(Arg,F)->fun(Brg) -> F(Arg,Brg) end.
-on3(Arg,Brg,F)->fun(Crg) -> F(Arg,Brg,Crg) end.
-
 handle_call({to_list,TreeID},_From,Trees) ->
-  Reply=doTree(TreeID,Trees,fun gb_trees:to_list/1),
+  Reply=doTree(TreeID,Trees,?tolist),
+  %Reply=doTree(TreeID,Trees,gb_trees:to_list(_)),
   {reply,Reply,Trees};
 
 handle_call({lookup,Key,TreeID},_From,Trees) ->
-  Reply=doTree(TreeID,Trees,on2(Key,fun gb_trees:lookup/2)),
+  Reply=doTree(TreeID,Trees,?lookup),
   {reply,Reply,Trees};
 
 handle_call({store_tree,TreeID,Tree},_From,Trees) ->
@@ -181,22 +201,14 @@ handle_call({store_tree,TreeID,Tree},_From,Trees) ->
   end.
 
 handle_cast({delete,Key,TreeID},Trees) ->
-  NewTrees=updateTree(TreeID,Trees,on2(Key,fun gb_trees:delete/2)),
-  {noreply,NewTrees};
-
-handle_cast({remove,Key,TreeID},Trees) ->
-  NewTrees=updateTree(TreeID,Trees,on2(Key,fun gb_trees:delete_any/2)),
+  NewTrees=updateTree(TreeID,Trees,?delete),
   {noreply,NewTrees};
 
 handle_cast({clear,TreeID},Trees) ->
-  {noreply,Trees#{TreeID=>gb_trees:empty()}};
-
-handle_cast({insert,Key,Entry,TreeID},Trees) ->
-  NewTrees=updateTree(TreeID,Trees,on3(Key,Entry,fun gb_trees:insert/3)),
-  {noreply,NewTrees};
-    
+  {noreply,Trees#{TreeID=>?empty_tree}};
 
 handle_cast({update,Key,Entry,TreeID},Trees) ->
-  NewTrees=updateTree(TreeID,Trees,on3(Key,Entry,fun gb_trees:enter/3)),
+  NewTrees=updateTree(TreeID,Trees,?update),
   {noreply,NewTrees}.
+    
 
